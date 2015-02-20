@@ -1,14 +1,14 @@
 # nagios-check-supervisord
 Nagios/Icinga plugin for supervisord via XMLRPC
 
-# Supervisord Configuration
+## Supervisord Configuration
 
-[inet_http_server]
-port = :9001
-username = user
-password = password
+    [inet_http_server]
+    port = :9001
+    username = user
+    password = password
 
-# Nagios Configuration
+## Nagios Configuration
 
 Command declaration:
 
@@ -41,7 +41,7 @@ With authentication:
         check_command                   check_supervisord_auth!processname!user!password
     }
 
-# Kudos
+## Kudos
 
 Thanks to [timgws][1].
 
