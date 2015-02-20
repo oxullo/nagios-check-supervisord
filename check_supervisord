@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import sys
+import xmlrpclib
+import argparse
+import socket
+
+NAGIOS_STATE_OK        = 0
+NAGIOS_STATE_WARNING   = 1
+NAGIOS_STATE_CRITICAL  = 2
+NAGIOS_STATE_UNKNOWN   = 3
+NAGIOS_STATE_DEPENDENT = 4
+
+SUPERVISOR_STATE_STOPPED  = 0
+SUPERVISOR_STATE_STARTING = 10
+SUPERVISOR_STATE_RUNNING  = 20
+SUPERVISOR_STATE_BACKOFF  = 30
+SUPERVISOR_STATE_STOPPING = 40
+SUPERVISOR_STATE_EXITED   = 100
+SUPERVISOR_STATE_FATAL    = 200
+SUPERVISOR_STATE_UNKNOWN  = 1000
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Nagios plugin - supervisord check')
+    parser.add_argument('-H', '--host', required=True,
+            help='hostname or IP address of the target RPC')
+    parser.add_argument('-n', '--name', required=True, help='program name')
+    parser.add_argument('-u', '--username', help='username for 401 auth')
+    parser.add_argument('-p', '--password', help='password for 401 auth')
+
+    return parser.parse_args()
+
+def get_processes(url):
+    server = xmlrpclib.Server(url)
+
+    try:
+        return server.supervisor.getAllProcessInfo()
+    except socket.error, e:
+        print 'UNKNOWN - Error while connecting to %s: %s' % (url, str(e))
+        sys.exit(NAGIOS_STATE_UNKNOWN)
+    except xmlrpclib.ProtocolError, e:
+        if hasattr(e, 'errcode') and e.errcode == 401:
+            print 'UNKNOWN - Error: authentication required'
+            sys.exit(NAGIOS_STATE_UNKNOWN)
+        else:
+            print 'UNKNOWN - Error: %s' % str(e)
+            sys.exit(NAGIOS_STATE_UNKNOWN)
+
+def find_process(name, processes):
+    for process in processes:
+        if process['name'] == name:
+            if process['state'] == SUPERVISOR_STATE_RUNNING:
+                print 'OK - Running: %s' % process['description']
+                sys.exit(NAGIOS_STATE_OK)
+            elif process['state'] == SUPERVISOR_STATE_STARTING:
+                print 'WARNING - Process is starting'
+                sys.exit(NAGIOS_STATE_WARNING)
+            else:
+                print 'CRITICAL - State: %d Cause: %s' % (process['state'],
+                        process['description'])
+                sys.exit(NAGIOS_STATE_CRITICAL)
+
+    print 'CRITICAL - Cannot find process %s' % args.name
+    sys.exit(NAGIOS_STATE_CRITICAL)
+
+def main():
+    args = parse_args()
+
+    if args.username and args.password:
+        url = 'http://%s:%s@%s:9001/RPC2' % (args.username, args.password, args.host)
+    else:
+        url = 'http://%s:9001/RPC2' % args.host
+
+    find_process(args.name, get_processes(url))
+
+
+if __name__ == '__main__':
+    main()
